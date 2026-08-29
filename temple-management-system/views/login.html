@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<script>
+
+    const params =
+    new URLSearchParams(window.location.search);
+
+    const error =
+    params.get('error');
+
+    if (error) {
+
+        const errorMessage =
+        document.getElementById('errorMessage');
+
+        errorMessage.textContent = error;
+
+        errorMessage.style.display = 'block';
+
+    }
+
+</script>
+<body>
+
+<div class="container">
+
+    <h2>ENS Login</h2>
+    <div id="errorMessage"
+     style="
+        display:none;
+        color:red;
+        text-align:center;
+        margin-top:15px;
+        font-size:16px;
+        font-weight:bold;
+     ">
+</div>
+
+    <form action="/login" method="POST">
+
+        <input type="text" name="username" placeholder="Username" required>
+
+        <input type="password" name="password" placeholder="Password" required>
+
+        <button type="submit">Login</button>
+
+    </form>
+
+</div>
+
+</body>
+</html>

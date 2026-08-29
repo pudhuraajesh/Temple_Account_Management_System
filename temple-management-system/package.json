@@ -1,0 +1,33 @@
+{
+  "name": "temple-management-system",
+  "version": "1.0.0",
+  "description": "Temple Account Management System",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "temple",
+    "management",
+    "accounting",
+    "express",
+    "mysql"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "body-parser": "^2.2.2",
+    "dotenv": "^16.4.7",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "mysql2": "^3.22.3",
+    "pdfkit": "^0.16.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
