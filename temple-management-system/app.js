@@ -92,37 +92,59 @@ app.post('/login', (req, res) => {
 app.post('/financial-year', (req, res) => {
 
     const { name, mobile, financial_year } = req.body;
+    const cleanYear = (financial_year || '').trim();
 
-    db.query(
-        'UPDATE financial_years SET is_selected = false',
-        () => {
-
-            const sql = `
-                INSERT INTO financial_years
-                (name,mobile,financial_year,is_selected)
-                VALUES (?,?,?,true)
-            `;
-
-            db.query(
-                sql,
-                [name, mobile, financial_year],
-                (err, result) => {
-
-                    if (err) {
-                        return res.send(
-                            'Financial Year Already Exists'
-                        );
-                    }
-
-                    res.sendFile(
-                        path.join(__dirname, 'views/current-balance.html')
-                    );
-
-                }
-            );
-
+    // Check if financial year already exists
+    const checkSql = 'SELECT id FROM financial_years WHERE TRIM(LOWER(financial_year)) = TRIM(LOWER(?))';
+    db.query(checkSql, [cleanYear], (err, checkResult) => {
+        if (err) {
+            console.error('[Financial Year Check Error]:', err);
+            return res.send('Database Error: ' + err.message);
         }
-    );
+
+        if (checkResult.length > 0) {
+            return res.send(`
+                <script>
+                    alert('Financial Year "' + ${JSON.stringify(cleanYear)} + '" already exists!');
+                    window.history.back();
+                </script>
+            `);
+        }
+
+        db.query(
+            'UPDATE financial_years SET is_selected = false',
+            () => {
+
+                const sql = `
+                    INSERT INTO financial_years
+                    (name,mobile,financial_year,is_selected)
+                    VALUES (?,?,?,true)
+                `;
+
+                db.query(
+                    sql,
+                    [name, mobile, cleanYear],
+                    (err, result) => {
+
+                        if (err) {
+                            return res.send(`
+                                <script>
+                                    alert('Financial Year already exists!');
+                                    window.history.back();
+                                </script>
+                            `);
+                        }
+
+                        res.sendFile(
+                            path.join(__dirname, 'views/current-balance.html')
+                        );
+
+                    }
+                );
+
+            }
+        );
+    });
 
 });
 
@@ -135,172 +157,198 @@ app.post('/add-financial-year', (req, res) => {
         financial_year
     } = req.body;
 
+    const cleanYear = (financial_year || '').trim();
 
     // ==========================================
-    // GET PREVIOUS SELECTED FINANCIAL YEAR BALANCE
+    // CHECK IF FINANCIAL YEAR ALREADY EXISTS
     // ==========================================
+    const checkSql = 'SELECT id FROM financial_years WHERE TRIM(LOWER(financial_year)) = TRIM(LOWER(?))';
+    db.query(checkSql, [cleanYear], (err, checkResult) => {
 
-    const getCurrentSql = `
-        SELECT cb.amount
-        FROM financial_years fy
+        if (err) {
+            console.error('[Financial Year Check Error]:', err);
+            return res.send('Database Error: ' + err.message);
+        }
 
-        LEFT JOIN current_balance cb
-        ON fy.id = cb.financial_year_id
+        if (checkResult.length > 0) {
+            return res.send(`
+                <script>
+                    alert('Financial Year "' + ${JSON.stringify(cleanYear)} + '" already exists! Please enter a different financial year.');
+                    window.history.back();
+                </script>
+            `);
+        }
 
-        WHERE fy.is_selected = true
+        // ==========================================
+        // GET PREVIOUS SELECTED FINANCIAL YEAR BALANCE
+        // ==========================================
 
-        LIMIT 1
-    `;
+        const getCurrentSql = `
+            SELECT cb.amount
+            FROM financial_years fy
 
+            LEFT JOIN current_balance cb
+            ON fy.id = cb.financial_year_id
 
-    db.query(
-        getCurrentSql,
-        (err, currentResult) => {
+            WHERE fy.is_selected = true
 
-            if (err) {
-
-                console.log(err);
-
-                console.error('[Error Occurred]: Database Error', typeof err !== 'undefined' ? err : ''); return res.send('Database Error: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
-
-            }
-
-
-            // ==========================================
-            // PREVIOUS BALANCE
-            // ==========================================
-
-            let previousAmount = 0;
-
-
-            if (
-                currentResult.length > 0 &&
-                currentResult[0].amount !== null
-            ) {
-
-                previousAmount =
-                Number(currentResult[0].amount);
-
-            }
+            LIMIT 1
+        `;
 
 
-            // ==========================================
-            // UNSELECT OLD FINANCIAL YEAR
-            // ==========================================
+        db.query(
+            getCurrentSql,
+            (err, currentResult) => {
 
-            const updateSql = `
-                UPDATE financial_years
-                SET is_selected = false
-            `;
+                if (err) {
 
+                    console.log(err);
 
-            db.query(
-                updateSql,
-                (err) => {
+                    console.error('[Error Occurred]: Database Error', typeof err !== 'undefined' ? err : ''); return res.send('Database Error: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
 
-                    if (err) {
-
-                        console.log(err);
-
-                        console.error('[Error Occurred]: Financial Year Update Error', typeof err !== 'undefined' ? err : ''); return res.send('Financial Year Update Error: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
-
-                    }
+                }
 
 
-                    // ==========================================
-                    // INSERT NEW FINANCIAL YEAR
-                    // ==========================================
+                // ==========================================
+                // PREVIOUS BALANCE
+                // ==========================================
 
-                    const insertYearSql = `
-                        INSERT INTO financial_years
-                        (
-                            name,
-                            mobile,
-                            financial_year,
-                            is_selected
-                        )
-                        VALUES (?,?,?,true)
-                    `;
+                let previousAmount = 0;
 
 
-                    db.query(
-                        insertYearSql,
-                        [
-                            name,
-                            mobile,
-                            financial_year
-                        ],
-                        (err, yearResult) => {
+                if (
+                    currentResult.length > 0 &&
+                    currentResult[0].amount !== null
+                ) {
 
-                            if (err) {
+                    previousAmount =
+                    Number(currentResult[0].amount);
 
-                                console.log(err);
+                }
 
-                                return res.send(
-                                    'Financial Year Already Exists'
+
+                // ==========================================
+                // UNSELECT OLD FINANCIAL YEAR
+                // ==========================================
+
+                const updateSql = `
+                    UPDATE financial_years
+                    SET is_selected = false
+                `;
+
+
+                db.query(
+                    updateSql,
+                    (err) => {
+
+                        if (err) {
+
+                            console.log(err);
+
+                            console.error('[Error Occurred]: Financial Year Update Error', typeof err !== 'undefined' ? err : ''); return res.send('Financial Year Update Error: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
+
+                        }
+
+
+                        // ==========================================
+                        // INSERT NEW FINANCIAL YEAR
+                        // ==========================================
+
+                        const insertYearSql = `
+                            INSERT INTO financial_years
+                            (
+                                name,
+                                mobile,
+                                financial_year,
+                                is_selected
+                            )
+                            VALUES (?,?,?,true)
+                        `;
+
+
+                        db.query(
+                            insertYearSql,
+                            [
+                                name,
+                                mobile,
+                                cleanYear
+                            ],
+                            (err, yearResult) => {
+
+                                if (err) {
+
+                                    console.log(err);
+
+                                    return res.send(`
+                                        <script>
+                                            alert('Financial Year already exists!');
+                                            window.history.back();
+                                        </script>
+                                    `);
+
+                                }
+
+
+                                const newFinancialYearId =
+                                yearResult.insertId;
+
+
+                                // ==========================================
+                                // INSERT CURRENT BALANCE
+                                // ==========================================
+
+                                const insertBalanceSql = `
+                                    INSERT INTO current_balance
+                                    (
+                                        financial_year_id,
+                                        financial_year,
+                                        initial_balance,
+                                        amount
+                                    )
+                                    VALUES (?,?,?,?)
+                                `;
+
+
+                                db.query(
+                                    insertBalanceSql,
+                                    [
+                                        newFinancialYearId,
+                                        cleanYear,
+                                        previousAmount,
+                                        previousAmount
+                                    ],
+                                    (err) => {
+
+                                        if (err) {
+
+                                            console.log(err);
+
+                                            console.error('[Error Occurred]: Current Balance Insert Error', typeof err !== 'undefined' ? err : ''); return res.send('Current Balance Insert Error: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
+
+                                        }
+
+
+                                        // ==========================================
+                                        // SUCCESS
+                                        // ==========================================
+
+                                        res.redirect(
+                                            '/financial-years'
+                                        );
+
+                                    }
                                 );
 
                             }
+                        );
 
+                    }
+                );
 
-                            const newFinancialYearId =
-                            yearResult.insertId;
+            }
+        );
 
-
-                            // ==========================================
-                            // INSERT CURRENT BALANCE
-                            // ==========================================
-
-                            const insertBalanceSql = `
-                                INSERT INTO current_balance
-                                (
-                                    financial_year_id,
-                                    financial_year,
-                                    initial_balance,
-                                    amount
-                                )
-                                VALUES (?,?,?,?)
-                            `;
-
-
-                            db.query(
-                                insertBalanceSql,
-                                [
-                                    newFinancialYearId,
-                                    financial_year,
-                                    previousAmount,
-                                    previousAmount
-                                ],
-                                (err) => {
-
-                                    if (err) {
-
-                                        console.log(err);
-
-                                        console.error('[Error Occurred]: Current Balance Insert Error', typeof err !== 'undefined' ? err : ''); return res.send('Current Balance Insert Error: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
-
-                                    }
-
-
-                                    // ==========================================
-                                    // SUCCESS
-                                    // ==========================================
-
-                                    res.redirect(
-                                        '/financial-years'
-                                    );
-
-                                }
-                            );
-
-                        }
-                    );
-
-                }
-            );
-
-        }
-    );
+    });
 
 });
 
@@ -689,11 +737,13 @@ app.get('/financial-years', (req, res) => {
        fy.name,
        fy.mobile,
        fy.financial_year,
+       fy.is_selected,
        cb.initial_balance,
        cb.amount
         FROM financial_years fy
         LEFT JOIN current_balance cb
         ON fy.id = cb.financial_year_id
+        ORDER BY fy.id ASC
     `;
 
     db.query(sql, (err, result) => {
@@ -704,6 +754,11 @@ app.get('/financial-years', (req, res) => {
 
         result.forEach((data) => {
 
+            const isSelected = data.is_selected == 1 || data.is_selected === true || data.is_selected === '1';
+            const selectButton = isSelected
+                ? `<button type="button" style="background-color: #28a745; cursor: default;" disabled>Active</button>`
+                : `<a href="/select-financial-year/${data.id}"><button type="button">Select</button></a>`;
+
             rows += `
 
                 <tr>
@@ -712,7 +767,7 @@ app.get('/financial-years', (req, res) => {
 
                     <td>${data.mobile}</td>
 
-                    <td>${data.financial_year}</td>
+                    <td>${data.financial_year} ${isSelected ? '<span style="color:#28a745; font-size:12px; font-weight:bold;">(Active)</span>' : ''}</td>
 
                     <td>
     ₹${data.initial_balance || 0}
@@ -726,9 +781,7 @@ app.get('/financial-years', (req, res) => {
 
                         <div class="action-buttons">
 
-                            <a href="/select-financial-year/${data.id}">
-                                <button>Select</button>
-                            </a>
+                            ${selectButton}
 
                             <a href="/edit-financial-year/${data.id}">
                                 <button>Edit</button>
@@ -965,7 +1018,6 @@ app.get('/edit-financial-year/:id',(req,res)=>{
 });
 
 // UPDATE FINANCIAL YEAR
-// UPDATE FINANCIAL YEAR
 app.post('/update-financial-year/:id',(req,res)=>{
 
     const id = req.params.id;
@@ -977,92 +1029,114 @@ app.post('/update-financial-year/:id',(req,res)=>{
         amount
     } = req.body;
 
-    // UPDATE FINANCIAL YEAR TABLE
-    const updateYearSql = `
-        UPDATE financial_years
-        SET
-            name=?,
-            mobile=?,
-            financial_year=?
-        WHERE id=?
-    `;
+    const cleanYear = (financial_year || '').trim();
 
-    db.query(
-        updateYearSql,
-        [
-            name,
-            mobile,
-            financial_year,
-            id
-        ],
-        (err,result)=>{
+    // Check if another financial year with this name already exists
+    const checkSql = 'SELECT id FROM financial_years WHERE TRIM(LOWER(financial_year)) = TRIM(LOWER(?)) AND id != ?';
+    db.query(checkSql, [cleanYear, id], (err, checkResult) => {
 
-            if(err){
-
-                console.log(err);
-
-                console.error('[Error Occurred]: Financial Year Update Failed', typeof err !== 'undefined' ? err : ''); return res.send('Financial Year Update Failed: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
-            }
-
-            // UPDATE CURRENT BALANCE TABLE
-            const updateBalanceSql = `
-                UPDATE current_balance
-                SET
-                    financial_year=?,
-                    amount=?
-                WHERE financial_year_id=?
-            `;
-
-            db.query(
-                updateBalanceSql,
-                [
-                    financial_year,
-                    amount,
-                    id
-                ],
-                (err,result)=>{
-
-                    if(err){
-
-                        console.log(err);
-
-                        console.error('[Error Occurred]: Balance Update Failed', typeof err !== 'undefined' ? err : ''); return res.send('Balance Update Failed: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
-                    }
-
-                    // UPDATE INCOME TABLE
-                    const updateIncomeSql = `
-                        UPDATE income
-                        SET financial_year=?
-                        WHERE financial_year_id=?
-                    `;
-
-                    db.query(
-                        updateIncomeSql,
-                        [
-                            financial_year,
-                            id
-                        ],
-                        (err,result)=>{
-
-                            if(err){
-
-                                console.log(err);
-
-                                console.error('[Error Occurred]: Income Update Failed', typeof err !== 'undefined' ? err : ''); return res.send('Income Update Failed: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
-                            }
-
-                            res.redirect(
-                                '/financial-years'
-                            );
-
-                        }
-                    );
-
-                }
-            );
-
+        if (err) {
+            console.error('[Financial Year Check Error]:', err);
+            return res.send('Database Error: ' + err.message);
         }
-    );
+
+        if (checkResult.length > 0) {
+            return res.send(`
+                <script>
+                    alert('Financial Year "' + ${JSON.stringify(cleanYear)} + '" already exists! Please choose a different year.');
+                    window.history.back();
+                </script>
+            `);
+        }
+
+        // UPDATE FINANCIAL YEAR TABLE
+        const updateYearSql = `
+            UPDATE financial_years
+            SET
+                name=?,
+                mobile=?,
+                financial_year=?
+            WHERE id=?
+        `;
+
+        db.query(
+            updateYearSql,
+            [
+                name,
+                mobile,
+                cleanYear,
+                id
+            ],
+            (err,result)=>{
+
+                if(err){
+
+                    console.log(err);
+
+                    console.error('[Error Occurred]: Financial Year Update Failed', typeof err !== 'undefined' ? err : ''); return res.send('Financial Year Update Failed: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
+                }
+
+                // UPDATE CURRENT BALANCE TABLE
+                const updateBalanceSql = `
+                    UPDATE current_balance
+                    SET
+                        financial_year=?,
+                        amount=?
+                    WHERE financial_year_id=?
+                `;
+
+                db.query(
+                    updateBalanceSql,
+                    [
+                        cleanYear,
+                        amount,
+                        id
+                    ],
+                    (err,result)=>{
+
+                        if(err){
+
+                            console.log(err);
+
+                            console.error('[Error Occurred]: Balance Update Failed', typeof err !== 'undefined' ? err : ''); return res.send('Balance Update Failed: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
+                        }
+
+                        // UPDATE INCOME TABLE
+                        const updateIncomeSql = `
+                            UPDATE income
+                            SET financial_year=?
+                            WHERE financial_year_id=?
+                        `;
+
+                        db.query(
+                            updateIncomeSql,
+                            [
+                                cleanYear,
+                                id
+                            ],
+                            (err,result)=>{
+
+                                if(err){
+
+                                    console.log(err);
+
+                                    console.error('[Error Occurred]: Income Update Failed', typeof err !== 'undefined' ? err : ''); return res.send('Income Update Failed: ' + (typeof err !== 'undefined' && err && err.message ? err.message : ''));
+                                }
+
+                                res.redirect(
+                                    '/financial-years'
+                                );
+
+                            }
+                        );
+
+                    }
+                );
+
+            }
+        );
+
+    });
 
 });
 
@@ -1165,14 +1239,16 @@ app.get('/delete-financial-year/:id', (req, res) => {
 
                                             }
 
-
-                                            // ==========================================
-                                            // SUCCESS
-                                            // ==========================================
-
-                                            res.redirect(
-                                                '/financial-years'
-                                            );
+                                            // Check if any financial year is currently selected. If none, auto-activate the latest remaining one
+                                            db.query('SELECT id FROM financial_years WHERE is_selected = true LIMIT 1', (selErr, selRes) => {
+                                                if (!selErr && (!selRes || selRes.length === 0)) {
+                                                    db.query('UPDATE financial_years SET is_selected = true ORDER BY id DESC LIMIT 1', () => {
+                                                        res.redirect('/financial-years');
+                                                    });
+                                                } else {
+                                                    res.redirect('/financial-years');
+                                                }
+                                            });
 
                                         }
                                     );

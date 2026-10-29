@@ -93,13 +93,13 @@ function initializeDatabase(pool) {
                 if (completed === tables.length) {
                     // Auto-migrate receipt_no to VARCHAR(100) if it was previously created as INT
                     pool.query('ALTER TABLE income MODIFY COLUMN receipt_no VARCHAR(100) NOT NULL;', (alterErr) => {
-                        if (alterErr && !alterErr.message.includes('Duplicate')) {
-                            // Non-fatal if table is newly created with VARCHAR(100)
-                        }
-                        if (!hasError) {
-                            console.log('[DB Init] All database tables verified, migrated and ready.');
-                        }
-                        resolve();
+                        // Safely attempt unique constraint on financial_year (will succeed once any existing duplicates are cleaned up)
+                        pool.query('ALTER TABLE financial_years ADD UNIQUE (financial_year);', (uErr) => {
+                            if (!hasError) {
+                                console.log('[DB Init] All database tables verified, migrated and ready.');
+                            }
+                            resolve();
+                        });
                     });
                 }
             });
